@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Search, UserPlus, Check, X } from "lucide-react"
+import { Search, UserPlus, Check, X, UserMinus } from "lucide-react"
 import { FriendProfileDialog } from "@/components/friend-profile-dialog"
 import { toast } from "sonner"
 
@@ -18,6 +18,7 @@ interface FriendsViewProps {
 export function FriendsView({ userId }: FriendsViewProps) {
   const [friends, setFriends] = useState<Profile[]>([])
   const [pendingRequests, setPendingRequests] = useState<(Friendship & { profile: Profile })[]>([])
+  const [outgoingRequests, setOutgoingRequests] = useState<(Friendship & { profile: Profile })[]>([])
   const [searchUsername, setSearchUsername] = useState("")
   const [searchResult, setSearchResult] = useState<Profile | null>(null)
   const [selectedFriend, setSelectedFriend] = useState<Profile | null>(null)
@@ -28,6 +29,7 @@ export function FriendsView({ userId }: FriendsViewProps) {
   useEffect(() => {
     fetchFriends()
     fetchPendingRequests()
+    fetchOutgoingRequests()
   }, [])
 
   const fetchFriends = async () => {
@@ -79,18 +81,65 @@ export function FriendsView({ userId }: FriendsViewProps) {
     setPendingRequests((requests as any) || [])
   }
 
+  const fetchOutgoingRequests = async () => {
+    const { data: requests, error } = await supabase
+      .from("friendships")
+      .select("*, profile:friend_id(id, username, email, profile_picture_url)")
+      .eq("user_id", userId)
+      .eq("status", "pending")
+
+    if (error) {
+      console.error("Error fetching outgoing requests:", error)
+      return
+    }
+
+    setOutgoingRequests((requests as any) || [])
+  }
+
   const handleSearch = async () => {
     if (!searchUsername.trim()) {
-      toast.error("Please enter a username")
+      toast.error("Please enter a username or email")
       return
     }
 
     setIsSearching(true)
     setSearchResult(null)
 
-    const { data, error } = await supabase.from("profiles").select("*").eq("username", searchUsername.trim()).single()
+    const searchTerm = searchUsername.trim()
 
-    if (error || !data) {
+    // Search by both username and email
+    // Try username first, then email if username doesn't match
+    let data = null
+    let error = null
+
+    // First try username
+    const { data: usernameData, error: usernameError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("username", searchTerm)
+      .maybeSingle()
+
+    if (usernameData) {
+      data = usernameData
+    } else {
+      // If username not found, try email
+      const { data: emailData, error: emailError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("email", searchTerm)
+        .maybeSingle()
+
+      if (emailError) {
+        error = emailError
+      } else {
+        data = emailData
+      }
+    }
+
+    if (error) {
+      console.error("Search error:", error)
+      toast.error("Error searching for user")
+    } else if (!data) {
       toast.error("User not found")
     } else if (data.id === userId) {
       toast.error("You cannot add yourself as a friend")
@@ -128,6 +177,7 @@ export function FriendsView({ userId }: FriendsViewProps) {
       toast.success("Friend request sent!")
       setSearchResult(null)
       setSearchUsername("")
+      fetchOutgoingRequests() // Refresh outgoing requests list
     }
   }
 
@@ -158,20 +208,81 @@ export function FriendsView({ userId }: FriendsViewProps) {
   }
 
   const handleRejectRequest = async (requestId: string) => {
+    if (!requestId) {
+      console.error("No request ID provided")
+      toast.error("Failed to reject request: Missing request ID")
+      return
+    }
+
+    try {
+      // Use API endpoint with admin privileges to ensure deletion works
+      const response = await fetch("/api/friends/reject", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success(data.message || "Friend request rejected")
+        fetchPendingRequests()
+      } else {
+        console.error("Error rejecting request:", data.error)
+        toast.error(data.error || "Failed to reject request")
+      }
+    } catch (error) {
+      console.error("Error rejecting request:", error)
+      toast.error("Failed to reject request. Please try again.")
+    }
+  }
+
+  const handleCancelRequest = async (requestId: string) => {
     const { error } = await supabase.from("friendships").delete().eq("id", requestId)
 
     if (error) {
-      console.error("Error rejecting request:", error)
-      toast.error("Failed to reject request")
+      console.error("Error cancelling request:", error)
+      toast.error("Failed to cancel request")
     } else {
-      toast.success("Friend request rejected")
-      fetchPendingRequests()
+      toast.success("Friend request cancelled")
+      fetchOutgoingRequests()
+    }
+  }
+
+  const handleRemoveFriend = async (friendId: string, e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent opening the friend profile dialog
+
+    if (!confirm("Are you sure you want to remove this friend?")) {
+      return
+    }
+
+    try {
+      // Use API endpoint with admin privileges to ensure deletion works
+      const response = await fetch("/api/friends/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friendId }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast.success(data.message || "Friend removed successfully from both sides")
+        fetchFriends() // Refresh the friends list
+      } else {
+        console.error("Error removing friend:", data.error)
+        toast.error(data.error || "Failed to remove friend. Please try again.")
+      }
+    } catch (error) {
+      console.error("Error removing friend:", error)
+      toast.error("Failed to remove friend. Please try again.")
     }
   }
 
   return (
-    <div className="p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="h-full overflow-y-auto">
+      <div className="p-8">
+        <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">
             <span className="gradient-text">Friends</span>
@@ -210,6 +321,15 @@ export function FriendsView({ userId }: FriendsViewProps) {
                           <p className="font-semibold truncate">{friend.username || "Anonymous"}</p>
                           <p className="text-sm text-muted-foreground truncate">{friend.email}</p>
                         </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                          onClick={(e) => handleRemoveFriend(friend.id, e)}
+                          title="Remove friend"
+                        >
+                          <UserMinus className="w-4 h-4" />
+                        </Button>
                       </div>
                     </Card>
                   ))}
@@ -227,7 +347,7 @@ export function FriendsView({ userId }: FriendsViewProps) {
               <div className="space-y-3">
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Enter username"
+                    placeholder="Enter user's email"
                     value={searchUsername}
                     onChange={(e) => setSearchUsername(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -261,7 +381,7 @@ export function FriendsView({ userId }: FriendsViewProps) {
 
             {/* Pending Requests */}
             <Card className="p-6">
-              <h2 className="text-lg font-semibold mb-4 text-primary">Requests ({pendingRequests.length})</h2>
+              <h2 className="text-lg font-semibold mb-4 text-primary">Incoming Requests ({pendingRequests.length})</h2>
 
               {pendingRequests.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-4">No pending requests</p>
@@ -280,7 +400,10 @@ export function FriendsView({ userId }: FriendsViewProps) {
                       <div className="flex gap-2">
                         <Button
                           size="sm"
-                          onClick={() => handleAcceptRequest(request.id, request.user_id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleAcceptRequest(request.id, request.user_id)
+                          }}
                           className="flex-1 bg-primary"
                         >
                           <Check className="w-3 h-3 mr-1" />
@@ -289,7 +412,10 @@ export function FriendsView({ userId }: FriendsViewProps) {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleRejectRequest(request.id)}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleRejectRequest(request.id)
+                          }}
                           className="flex-1"
                         >
                           <X className="w-3 h-3 mr-1" />
@@ -301,9 +427,43 @@ export function FriendsView({ userId }: FriendsViewProps) {
                 </div>
               )}
             </Card>
+
+            {/* Outgoing Requests */}
+            <Card className="p-6">
+              <h2 className="text-lg font-semibold mb-4 text-primary">Outgoing Requests ({outgoingRequests.length})</h2>
+
+              {outgoingRequests.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No pending sent requests</p>
+              ) : (
+                <div className="space-y-3">
+                  {outgoingRequests.map((request) => (
+                    <Card key={request.id} className="p-3 border-primary/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Avatar className="w-8 h-8">
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                            {request.profile.username?.[0]?.toUpperCase() || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <p className="text-sm font-medium truncate flex-1">{request.profile.username}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCancelRequest(request.id)}
+                        className="w-full"
+                      >
+                        <X className="w-3 h-3 mr-1" />
+                        Cancel Request
+                      </Button>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
         </div>
       </div>
+    </div>
 
       {selectedFriend && (
         <FriendProfileDialog

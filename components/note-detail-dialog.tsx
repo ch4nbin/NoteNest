@@ -3,9 +3,8 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import type { Note } from "@/lib/types/database"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
-import { Volume2, Share2, Loader2 } from "lucide-react"
+import { Volume2, Share2, Loader2, X } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -77,8 +76,8 @@ export function NoteDetailDialog({ note, isOpen, onClose }: NoteDetailDialogProp
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[80vh]">
-        <DialogHeader>
+      <DialogContent className="max-w-full w-screen h-screen max-h-screen m-0 rounded-none flex flex-col !top-0 !left-0 !translate-x-0 !translate-y-0 !p-0 sm:!max-w-full" showCloseButton={false}>
+        <DialogHeader className="flex-shrink-0 p-6 pb-4">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
               <DialogTitle className="text-2xl gradient-text">{note.title}</DialogTitle>
@@ -103,11 +102,14 @@ export function NoteDetailDialog({ note, isOpen, onClose }: NoteDetailDialogProp
               <Button size="sm" variant="outline" onClick={handleShareToX} disabled={isSharing} title="Share on X">
                 <Share2 className="w-4 h-4" />
               </Button>
+              <Button size="sm" variant="outline" onClick={onClose} title="Close">
+                <X className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] pr-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-20">
           <div className="space-y-4">
             {note.content && typeof note.content === "object" && "sections" in note.content ? (
               (note.content.sections as Array<{ title: string; content: string }>).map(
@@ -126,10 +128,10 @@ export function NoteDetailDialog({ note, isOpen, onClose }: NoteDetailDialogProp
               </p>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {note.source_url && (
-          <div className="mt-4 pt-4 border-t border-border">
+          <div className="mt-4 pt-4 px-6 pb-6 border-t border-border flex-shrink-0">
             <p className="text-xs text-muted-foreground">
               Source:{" "}
               <a

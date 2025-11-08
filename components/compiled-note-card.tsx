@@ -5,7 +5,7 @@ import type React from "react"
 import type { CompiledNote } from "@/lib/types/database"
 import { Card } from "@/components/ui/card"
 import { Layers, Trash2 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { CompiledNoteDetailDialog } from "@/components/compiled-note-detail-dialog"
@@ -18,7 +18,32 @@ interface CompiledNoteCardProps {
 
 export function CompiledNoteCard({ note, onRefresh }: CompiledNoteCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [existingReferencesCount, setExistingReferencesCount] = useState(note.source_note_ids?.length || 0)
   const supabase = createClient()
+
+  useEffect(() => {
+    fetchExistingReferencesCount()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note.source_note_ids?.join(","), note.id])
+
+  const fetchExistingReferencesCount = async () => {
+    if (!note.source_note_ids || note.source_note_ids.length === 0) {
+      setExistingReferencesCount(0)
+      return
+    }
+
+    const { data, error } = await supabase
+      .from("notes")
+      .select("id")
+      .in("id", note.source_note_ids)
+
+    if (error) {
+      console.error("Error fetching source notes count:", error)
+      return
+    }
+
+    setExistingReferencesCount(data?.length || 0)
+  }
 
   const deleteNote = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -53,7 +78,7 @@ export function CompiledNoteCard({ note, onRefresh }: CompiledNoteCardProps) {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Compiled from {note.source_note_ids?.length || 0} notes • {new Date(note.created_at).toLocaleDateString()}
+          {existingReferencesCount} references • {new Date(note.created_at).toLocaleDateString()}
         </p>
       </Card>
 
