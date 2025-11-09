@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { BookOpen, PlusCircle, Users, Settings, LogOut } from "lucide-react"
+import { Bird, BookOpen, PlusCircle, Users, Settings, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
@@ -47,7 +47,7 @@ export function DashboardSidebar() {
       <div className="p-6 border-b border-border">
         <Link href="/dashboard" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-            <BookOpen className="w-5 h-5 text-primary" />
+            <Bird className="w-5 h-5 text-primary" />
           </div>
           <span className="text-xl font-bold gradient-text">NoteNest</span>
         </Link>

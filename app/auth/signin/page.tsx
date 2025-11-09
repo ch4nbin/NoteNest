@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { BookMarked } from "lucide-react"
+import { Bird } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
@@ -43,7 +43,7 @@ export default function SignInPage() {
         <div className="bg-card border border-border rounded-2xl p-8 space-y-6 hover-lift">
           <div className="text-center space-y-2">
             <div className="flex justify-center mb-2">
-              <BookMarked className="h-12 w-12 text-primary" />
+              <Bird className="h-12 w-12 text-primary" />
             </div>
             <h1 className="text-3xl font-bold gradient-text">Welcome Back</h1>
             <p className="text-sm text-muted-foreground">Sign in to continue learning</p>
