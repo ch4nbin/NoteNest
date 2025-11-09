@@ -4,7 +4,8 @@ import type React from "react"
 
 import type { CompiledNote } from "@/lib/types/database"
 import { Card } from "@/components/ui/card"
-import { Layers, Trash2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Trash2 } from "lucide-react"
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,15 @@ export function CompiledNoteCard({ note, onRefresh }: CompiledNoteCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [existingReferencesCount, setExistingReferencesCount] = useState(note.source_note_ids?.length || 0)
   const supabase = createClient()
+
+  // Debug: log tags
+  useEffect(() => {
+    if (note.tags) {
+      console.log("[CompiledNoteCard] Note tags:", note.tags, "Type:", typeof note.tags, "IsArray:", Array.isArray(note.tags))
+    } else {
+      console.log("[CompiledNoteCard] Note has no tags property or tags is null/undefined")
+    }
+  }, [note.tags, note.id])
 
   useEffect(() => {
     fetchExistingReferencesCount()
@@ -69,13 +79,22 @@ export function CompiledNoteCard({ note, onRefresh }: CompiledNoteCardProps) {
       >
         <div className="flex items-start justify-between gap-2 mb-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Layers className="w-4 h-4 text-accent flex-shrink-0" />
             <h3 className="font-semibold text-sm line-clamp-1">{note.title}</h3>
           </div>
           <Button size="icon" variant="ghost" onClick={deleteNote} className="h-6 w-6 flex-shrink-0">
             <Trash2 className="w-3 h-3 text-destructive" />
           </Button>
         </div>
+
+        {note.tags && note.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {note.tags.slice(0, 3).map((tag: string) => (
+              <Badge key={tag} variant="secondary" className="text-xs bg-primary/10 text-primary">
+                {tag}
+              </Badge>
+            ))}
+          </div>
+        )}
 
         <p className="text-xs text-muted-foreground">
           {existingReferencesCount} references • {new Date(note.created_at).toLocaleDateString()}

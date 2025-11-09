@@ -88,25 +88,114 @@ export async function POST(request: NextRequest) {
       source_note_ids: section.source_note_ids || noteIds, // Fallback to all notes if AI didn't specify
     }))
 
+    // Combine the most relevant tags from source notes
+    const tagCounts: Record<string, number> = {}
+    
+    // Count tag frequency across all source notes
+    notes.forEach((note) => {
+      if (note.tags && Array.isArray(note.tags)) {
+        note.tags.forEach((tag: string) => {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1
+        })
+      }
+    })
+
+    // Sort tags by frequency (most common first) and take the top tags
+    // Prioritize tags that appear in multiple notes (more relevant)
+    const sortedTags = Object.entries(tagCounts)
+      .sort((a, b) => {
+        // First sort by frequency (descending)
+        if (b[1] !== a[1]) {
+          return b[1] - a[1]
+        }
+        // If same frequency, sort alphabetically
+        return a[0].localeCompare(b[0])
+      })
+      .map(([tag]) => tag)
+
+    // Take the most relevant tags (up to 5, or all if less than 5)
+    // Prefer tags that appear in at least 2 notes, but include top tags even if they only appear once
+    const compiledTags = sortedTags
+      .filter((tag, index) => {
+        const count = tagCounts[tag]
+        // Include if it appears in multiple notes, or if it's in the top 5
+        return count > 1 || index < 5
+      })
+      .slice(0, 5) // Limit to 5 tags max
+
+    console.log("[Compile] Combined tags from source notes:", compiledTags)
+
+    console.log("[Compile] Final tags to save:", compiledTags)
+
     // Save the compiled note
-    const { data: compiledNote, error: saveError } = await supabase
+    // Try with tags first, if that fails (column might not exist), try without tags
+    let compiledNote
+    let saveError
+    
+    const insertData: any = {
+      user_id: user.id,
+      title: compiledContent.title,
+      content: { sections: sectionsWithCitations },
+      source_note_ids: noteIds,
+    }
+
+    // Always try to insert with tags - ensure tags is always an array
+    const tagsToSave = Array.isArray(compiledTags) && compiledTags.length > 0 ? compiledTags : []
+    console.log("[Compile] Inserting with tags:", tagsToSave)
+    
+    const { data: noteWithTags, error: errorWithTags } = await supabase
       .from("compiled_notes")
       .insert({
-        user_id: user.id,
-        title: compiledContent.title,
-        content: { sections: sectionsWithCitations },
-        source_note_ids: noteIds,
+        ...insertData,
+        tags: tagsToSave,
       })
       .select()
       .single()
 
+    if (errorWithTags) {
+      console.warn("[Compile] Failed to insert with tags, trying without tags:", errorWithTags.message)
+      console.warn("[Compile] Error details:", JSON.stringify(errorWithTags, null, 2))
+      // If tags column doesn't exist, try without it
+      const { data: noteWithoutTags, error: errorWithoutTags } = await supabase
+        .from("compiled_notes")
+        .insert(insertData)
+        .select()
+        .single()
+      
+      compiledNote = noteWithoutTags
+      saveError = errorWithoutTags
+      
+      if (!errorWithoutTags) {
+        console.warn("[Compile] Note saved without tags - tags column may not exist in database")
+      }
+    } else {
+      compiledNote = noteWithTags
+      saveError = null
+      console.log("[Compile] Note saved successfully with tags:", noteWithTags?.tags)
+    }
+
     if (saveError) {
-      return NextResponse.json({ error: "Failed to save compiled note" }, { status: 500 })
+      console.error("[Compile] Database save error:", saveError)
+      return NextResponse.json(
+        { 
+          error: "Failed to save compiled note",
+          details: saveError.message || String(saveError)
+        },
+        { status: 500 }
+      )
     }
 
     return NextResponse.json({ success: true, note: compiledNote })
   } catch (error) {
-    console.error("Error compiling notes:", error)
-    return NextResponse.json({ error: "Failed to compile notes" }, { status: 500 })
+    console.error("[Compile] Error compiling notes:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    console.error("[Compile] Error details:", errorMessage)
+    return NextResponse.json(
+      { 
+        error: "Failed to compile notes",
+        details: errorMessage
+      },
+      { status: 500 }
+    )
   }
 }

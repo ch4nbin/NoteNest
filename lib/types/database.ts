@@ -25,6 +25,7 @@ export interface CompiledNote {
   user_id: string
   title: string
   content: any // jsonb
+  tags: string[]
   source_note_ids: string[]
   created_at: string
   updated_at: string

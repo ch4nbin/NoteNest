@@ -6,8 +6,11 @@ import type { Note, CompiledNote, Profile } from "@/lib/types/database"
 import { NoteCard } from "@/components/note-card"
 import { CompiledNoteCard } from "@/components/compiled-note-card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, X, Filter, ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 
 interface NotesViewProps {
@@ -21,11 +24,17 @@ export function NotesView({ userId }: NotesViewProps) {
   const [friends, setFriends] = useState<Profile[]>([])
   const [selectedFriends, setSelectedFriends] = useState<string[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [myNotesFilter, setMyNotesFilter] = useState<string>("")
+  const [friendsNotesDateFilter, setFriendsNotesDateFilter] = useState<string>("all")
+  const [myNotesFilter, setMyNotesFilter] = useState<string[]>([])
+  const [myNotesDateFilter, setMyNotesDateFilter] = useState<string>("all")
   const [isCompileMode, setIsCompileMode] = useState(false)
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([])
   const [allTags, setAllTags] = useState<string[]>([])
+  const [allFriendsTags, setAllFriendsTags] = useState<string[]>([])
+  const [allCompiledTags, setAllCompiledTags] = useState<string[]>([])
   const [compiledNotesFilter, setCompiledNotesFilter] = useState<string>("all")
+  const [compiledNotesTagFilter, setCompiledNotesTagFilter] = useState<string[]>([])
+  const [compiledNotesSourceCountFilter, setCompiledNotesSourceCountFilter] = useState<string>("all")
   const [filtersLoaded, setFiltersLoaded] = useState(false)
   const [isCompiling, setIsCompiling] = useState(false)
   const [compileProgress, setCompileProgress] = useState<string>("")
@@ -38,15 +47,35 @@ export function NotesView({ userId }: NotesViewProps) {
   // Load filters from localStorage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedMyNotesFilter = localStorage.getItem("myNotesFilter") || ""
+      // Helper function to safely parse JSON from localStorage
+      const safeParseJSON = (key: string, defaultValue: any) => {
+        try {
+          const item = localStorage.getItem(key)
+          if (!item) return defaultValue
+          return JSON.parse(item)
+        } catch (error) {
+          console.warn(`Failed to parse ${key} from localStorage, using default:`, error)
+          // Clear invalid data
+          localStorage.removeItem(key)
+          return defaultValue
+        }
+      }
+
+      const savedMyNotesFilter = safeParseJSON("myNotesFilter", [])
+      const savedMyNotesDateFilter = localStorage.getItem("myNotesDateFilter") || "all"
       const savedCompiledNotesFilter = localStorage.getItem("compiledNotesFilter") || "all"
-      const savedSelectedFriends = JSON.parse(localStorage.getItem("selectedFriends") || "[]")
-      const savedSelectedTags = JSON.parse(localStorage.getItem("selectedTags") || "[]")
+      const savedCompiledNotesTagFilter = safeParseJSON("compiledNotesTagFilter", [])
+      const savedSelectedFriends = safeParseJSON("selectedFriends", [])
+      const savedSelectedTags = safeParseJSON("selectedTags", [])
+      const savedFriendsNotesDateFilter = localStorage.getItem("friendsNotesDateFilter") || "all"
 
       setMyNotesFilter(savedMyNotesFilter)
+      setMyNotesDateFilter(savedMyNotesDateFilter)
       setCompiledNotesFilter(savedCompiledNotesFilter)
+      setCompiledNotesTagFilter(savedCompiledNotesTagFilter)
       setSelectedFriends(savedSelectedFriends)
       setSelectedTags(savedSelectedTags)
+      setFriendsNotesDateFilter(savedFriendsNotesDateFilter)
       setFiltersLoaded(true)
     }
   }, [])
@@ -63,15 +92,33 @@ export function NotesView({ userId }: NotesViewProps) {
   // Save filters to localStorage when they change
   useEffect(() => {
     if (filtersLoaded && typeof window !== "undefined") {
-      localStorage.setItem("myNotesFilter", myNotesFilter)
+      localStorage.setItem("myNotesFilter", JSON.stringify(myNotesFilter))
     }
   }, [myNotesFilter, filtersLoaded])
+
+  useEffect(() => {
+    if (filtersLoaded && typeof window !== "undefined") {
+      localStorage.setItem("myNotesDateFilter", myNotesDateFilter)
+    }
+  }, [myNotesDateFilter, filtersLoaded])
 
   useEffect(() => {
     if (filtersLoaded && typeof window !== "undefined") {
       localStorage.setItem("compiledNotesFilter", compiledNotesFilter)
     }
   }, [compiledNotesFilter, filtersLoaded])
+
+  useEffect(() => {
+    if (filtersLoaded && typeof window !== "undefined") {
+      localStorage.setItem("compiledNotesTagFilter", JSON.stringify(compiledNotesTagFilter))
+    }
+  }, [compiledNotesTagFilter, filtersLoaded])
+
+  useEffect(() => {
+    if (filtersLoaded && typeof window !== "undefined") {
+      localStorage.setItem("friendsNotesDateFilter", friendsNotesDateFilter)
+    }
+  }, [friendsNotesDateFilter, filtersLoaded])
 
   useEffect(() => {
     if (filtersLoaded && typeof window !== "undefined") {
@@ -154,6 +201,15 @@ export function NotesView({ userId }: NotesViewProps) {
       console.error("Error fetching friends' notes:", notesError)
     } else {
       setFriendsNotes(notes || [])
+
+      // Extract unique tags from friends' notes
+      const friendsTags = new Set<string>()
+      notes?.forEach((note) => {
+        if (note.tags && Array.isArray(note.tags)) {
+          note.tags.forEach((tag: string) => friendsTags.add(tag))
+        }
+      })
+      setAllFriendsTags(Array.from(friendsTags))
     }
   }
 
@@ -171,6 +227,15 @@ export function NotesView({ userId }: NotesViewProps) {
     }
 
     setCompiledNotes(data || [])
+
+    // Extract unique tags from compiled notes
+    const compiledTags = new Set<string>()
+    data?.forEach((note) => {
+      if (note.tags && Array.isArray(note.tags)) {
+        note.tags.forEach((tag: string) => compiledTags.add(tag))
+      }
+    })
+    setAllCompiledTags(Array.from(compiledTags))
   }
 
   const toggleNoteSelection = (noteId: string) => {
@@ -235,7 +300,10 @@ export function NotesView({ userId }: NotesViewProps) {
         return
       }
 
-      if (!response.ok) throw new Error("Failed to compile notes")
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(errorData.error || "Failed to compile notes")
+      }
 
       // Step 2: Saving compiled note
       setCompileProgress("Saving compiled note...")
@@ -262,7 +330,8 @@ export function NotesView({ userId }: NotesViewProps) {
         return
       }
       console.error("Error compiling notes:", error)
-      toast.error("Failed to compile notes", { id: compileToastIdRef.current || undefined })
+      const errorMessage = error.message || "Failed to compile notes"
+      toast.error(errorMessage, { id: compileToastIdRef.current || undefined })
     } finally {
       if (!abortController.signal.aborted) {
         setIsCompiling(false)
@@ -293,26 +362,59 @@ export function NotesView({ userId }: NotesViewProps) {
     setSelectedNoteIds([])
   }
 
-  const filteredMyNotes = myNotes.filter((note) => {
-    const matchesTag = myNotesFilter === "" || note.tags?.includes(myNotesFilter)
-    return matchesTag
-  })
+  const filteredMyNotes = myNotes
+    .filter((note) => {
+      const matchesTag = myNotesFilter.length === 0 || myNotesFilter.some((tag) => note.tags?.includes(tag))
+      return matchesTag
+    })
+    .sort((a, b) => {
+      if (myNotesDateFilter === "oldest") {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      } else {
+        // Recent first (default)
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+    })
 
-  const filteredCompiledNotes = [...compiledNotes].sort((a, b) => {
-    if (compiledNotesFilter === "oldest") {
-      // Sort oldest first
-      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    } else {
-      // Sort recent first (default)
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    }
-  })
+  const filteredCompiledNotes = compiledNotes
+    .filter((note) => {
+      // Filter by tags if tags are selected
+      if (compiledNotesTagFilter.length > 0) {
+        const matchesTag = compiledNotesTagFilter.some((tag) => note.tags?.includes(tag)) || false
+        if (!matchesTag) return false
+      }
+      // Filter by source note count
+      if (compiledNotesSourceCountFilter !== "all") {
+        const sourceCount = note.source_note_ids?.length || 0
+        if (compiledNotesSourceCountFilter === "few" && sourceCount > 3) return false
+        if (compiledNotesSourceCountFilter === "many" && sourceCount <= 3) return false
+      }
+      return true
+    })
+    .sort((a, b) => {
+      if (compiledNotesFilter === "oldest") {
+        // Sort oldest first
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      } else {
+        // Sort recent first (default)
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+    })
 
-  const filteredFriendsNotes = friendsNotes.filter((note) => {
-    const matchesFriend = selectedFriends.length === 0 || selectedFriends.includes(note.user_id)
-    const matchesTag = selectedTags.length === 0 || note.tags?.some((tag) => selectedTags.includes(tag))
-    return matchesFriend && matchesTag
-  })
+  const filteredFriendsNotes = friendsNotes
+    .filter((note) => {
+      const matchesFriend = selectedFriends.length === 0 || selectedFriends.includes(note.user_id)
+      const matchesTag = selectedTags.length === 0 || note.tags?.some((tag) => selectedTags.includes(tag))
+      return matchesFriend && matchesTag
+    })
+    .sort((a, b) => {
+      if (friendsNotesDateFilter === "oldest") {
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      } else {
+        // Recent first (default)
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+    })
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -360,28 +462,152 @@ export function NotesView({ userId }: NotesViewProps) {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
           {/* Friends' Notes Section */}
           <div className="bg-card border border-border rounded-lg p-6 shadow-sm flex flex-col h-full overflow-hidden">
-            <h2 className="text-xl font-semibold mb-4 text-primary flex-shrink-0">Friends' Notes</h2>
+            <div className="flex items-center justify-between mb-4 flex-shrink-0">
+              <h2 className="text-xl font-semibold text-primary">Friends' Notes</h2>
+            </div>
 
-            {/* Filters */}
-            <div className="space-y-3 mb-4 flex-shrink-0">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Filter by Friend</label>
-                <Select
-                  value={selectedFriends.length === 0 ? "all" : selectedFriends[0]}
-                  onValueChange={(value) => setSelectedFriends(value === "all" ? [] : [value])}
+            {/* Filter Controls */}
+            <div className="mb-4 flex-shrink-0 space-y-2">
+              <div className="flex items-center gap-2 flex-nowrap">
+                {friends.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 flex-shrink-0">
+                        <Filter className="w-3 h-3 mr-1.5" />
+                        Friends
+                        {selectedFriends.length > 0 && (
+                          <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-xs">
+                            {selectedFriends.length}
+                          </Badge>
+                        )}
+                        <ChevronDown className="w-3 h-3 ml-1.5 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64" align="start" side="bottom" sideOffset={4}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Filter by Friend</span>
+                          {selectedFriends.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs"
+                              onClick={() => setSelectedFriends([])}
+                            >
+                              Clear
+                            </Button>
+                          )}
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {friends.map((friend) => {
+                            const isSelected = selectedFriends.includes(friend.id)
+                            return (
+                              <div key={friend.id} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`friend-${friend.id}`}
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedFriends([...selectedFriends, friend.id])
+                                    } else {
+                                      setSelectedFriends(selectedFriends.filter((id) => id !== friend.id))
+                                    }
+                                  }}
+                                />
+                                <label
+                                  htmlFor={`friend-${friend.id}`}
+                                  className="text-sm cursor-pointer flex-1"
+                                >
+                                  {friend.username || friend.email}
+                                </label>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+                {allFriendsTags.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8 flex-shrink-0">
+                        <Filter className="w-3 h-3 mr-1.5" />
+                        Tags
+                        {selectedTags.length > 0 && (
+                          <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-xs">
+                            {selectedTags.length}
+                          </Badge>
+                        )}
+                        <ChevronDown className="w-3 h-3 ml-1.5 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64" align="start" side="bottom" sideOffset={4}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Filter by Tag</span>
+                          {selectedTags.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs"
+                              onClick={() => setSelectedTags([])}
+                            >
+                              Clear
+                            </Button>
+                          )}
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {allFriendsTags.map((tag) => {
+                            const isSelected = selectedTags.includes(tag)
+                            return (
+                              <div key={tag} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`tag-${tag}`}
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setSelectedTags([...selectedTags, tag])
+                                    } else {
+                                      setSelectedTags(selectedTags.filter((t) => t !== tag))
+                                    }
+                                  }}
+                                />
+                                <label htmlFor={`tag-${tag}`} className="text-sm cursor-pointer flex-1">
+                                  {tag}
+                                </label>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground mr-1">Date:</span>
+                <Badge
+                  variant={friendsNotesDateFilter === "all" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setFriendsNotesDateFilter("all")}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="All friends" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All friends</SelectItem>
-                    {friends.map((friend) => (
-                      <SelectItem key={friend.id} value={friend.id}>
-                        {friend.username || friend.email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  All
+                </Badge>
+                <Badge
+                  variant={friendsNotesDateFilter === "recent" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setFriendsNotesDateFilter("recent")}
+                >
+                  Recent
+                </Badge>
+                <Badge
+                  variant={friendsNotesDateFilter === "oldest" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setFriendsNotesDateFilter("oldest")}
+                >
+                  Oldest
+                </Badge>
               </div>
             </div>
 
@@ -407,27 +633,92 @@ export function NotesView({ userId }: NotesViewProps) {
 
           {/* My Notes Section */}
           <div className="bg-card border border-border rounded-lg p-6 shadow-sm flex flex-col h-full overflow-hidden">
-            <h2 className="text-xl font-semibold mb-4 text-primary flex-shrink-0">My Notes</h2>
+            <div className="flex items-center justify-between mb-4 flex-shrink-0">
+              <h2 className="text-xl font-semibold text-primary">My Notes</h2>
+            </div>
 
-            {/* Filter */}
-            <div className="mb-4 flex-shrink-0">
-              <label className="text-sm font-medium mb-2 block">Filter by Tag</label>
-              <Select
-                value={myNotesFilter === "" ? "all" : myNotesFilter}
-                onValueChange={(value) => setMyNotesFilter(value === "all" ? "" : value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All tags" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All tags</SelectItem>
-                  {allTags.map((tag) => (
-                    <SelectItem key={tag} value={tag}>
-                      {tag}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* Filter Controls */}
+            <div className="mb-4 flex-shrink-0 space-y-2">
+              {allTags.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8">
+                      <Filter className="w-3 h-3 mr-1.5" />
+                      Tags
+                      {myNotesFilter.length > 0 && (
+                        <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-xs">
+                          {myNotesFilter.length}
+                        </Badge>
+                      )}
+                      <ChevronDown className="w-3 h-3 ml-1.5 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64" align="start" side="bottom" sideOffset={4}>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Filter by Tag</span>
+                        {myNotesFilter.length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={() => setMyNotesFilter([])}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {allTags.map((tag) => {
+                          const isSelected = myNotesFilter.includes(tag)
+                          return (
+                            <div key={tag} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={`my-tag-${tag}`}
+                                checked={isSelected}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setMyNotesFilter([...myNotesFilter, tag])
+                                  } else {
+                                    setMyNotesFilter(myNotesFilter.filter((t) => t !== tag))
+                                  }
+                                }}
+                              />
+                              <label htmlFor={`my-tag-${tag}`} className="text-sm cursor-pointer flex-1">
+                                {tag}
+                              </label>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground mr-1">Date:</span>
+                <Badge
+                  variant={myNotesDateFilter === "all" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setMyNotesDateFilter("all")}
+                >
+                  All
+                </Badge>
+                <Badge
+                  variant={myNotesDateFilter === "recent" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setMyNotesDateFilter("recent")}
+                >
+                  Recent
+                </Badge>
+                <Badge
+                  variant={myNotesDateFilter === "oldest" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setMyNotesDateFilter("oldest")}
+                >
+                  Oldest
+                </Badge>
+              </div>
             </div>
 
             {/* Notes List */}
@@ -462,19 +753,159 @@ export function NotesView({ userId }: NotesViewProps) {
               </Button>
             </div>
 
-            {/* Filter */}
-            <div className="mb-4 flex-shrink-0">
-              <label className="text-sm font-medium mb-2 block">Filter by Date</label>
-              <Select value={compiledNotesFilter} onValueChange={setCompiledNotesFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All dates" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All dates</SelectItem>
-                  <SelectItem value="recent">Recent first</SelectItem>
-                  <SelectItem value="oldest">Oldest first</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Filter Controls */}
+            <div className="mb-4 flex-shrink-0 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {allCompiledTags.length > 0 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="h-8">
+                        <Filter className="w-3 h-3 mr-1.5" />
+                        Tags
+                        {compiledNotesTagFilter.length > 0 && (
+                          <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-xs">
+                            {compiledNotesTagFilter.length}
+                          </Badge>
+                        )}
+                        <ChevronDown className="w-3 h-3 ml-1.5 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64" align="start" side="bottom" sideOffset={4}>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">Filter by Tag</span>
+                          {compiledNotesTagFilter.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-xs"
+                              onClick={() => setCompiledNotesTagFilter([])}
+                            >
+                              Clear
+                            </Button>
+                          )}
+                        </div>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {allCompiledTags.map((tag) => {
+                            const isSelected = compiledNotesTagFilter.includes(tag)
+                            return (
+                              <div key={tag} className="flex items-center space-x-2">
+                                <Checkbox
+                                  id={`compiled-tag-${tag}`}
+                                  checked={isSelected}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
+                                      setCompiledNotesTagFilter([...compiledNotesTagFilter, tag])
+                                    } else {
+                                      setCompiledNotesTagFilter(compiledNotesTagFilter.filter((t) => t !== tag))
+                                    }
+                                  }}
+                                />
+                                <label htmlFor={`compiled-tag-${tag}`} className="text-sm cursor-pointer flex-1">
+                                  {tag}
+                                </label>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8">
+                      <Filter className="w-3 h-3 mr-1.5" />
+                      Sources
+                      {compiledNotesSourceCountFilter !== "all" && (
+                        <Badge variant="secondary" className="ml-1.5 h-4 px-1.5 text-xs">
+                          {compiledNotesSourceCountFilter === "few" ? "1-3" : "4+"}
+                        </Badge>
+                      )}
+                      <ChevronDown className="w-3 h-3 ml-1.5 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64" align="start" side="bottom" sideOffset={4}>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Filter by Source Count</span>
+                        {compiledNotesSourceCountFilter !== "all" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 text-xs"
+                            onClick={() => setCompiledNotesSourceCountFilter("all")}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="source-all"
+                            checked={compiledNotesSourceCountFilter === "all"}
+                            onCheckedChange={(checked) => {
+                              if (checked) setCompiledNotesSourceCountFilter("all")
+                            }}
+                          />
+                          <label htmlFor="source-all" className="text-sm cursor-pointer flex-1">
+                            All
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="source-few"
+                            checked={compiledNotesSourceCountFilter === "few"}
+                            onCheckedChange={(checked) => {
+                              if (checked) setCompiledNotesSourceCountFilter("few")
+                            }}
+                          />
+                          <label htmlFor="source-few" className="text-sm cursor-pointer flex-1">
+                            1-3 Sources
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="source-many"
+                            checked={compiledNotesSourceCountFilter === "many"}
+                            onCheckedChange={(checked) => {
+                              if (checked) setCompiledNotesSourceCountFilter("many")
+                            }}
+                          />
+                          <label htmlFor="source-many" className="text-sm cursor-pointer flex-1">
+                            4+ Sources
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground mr-1">Date:</span>
+                <Badge
+                  variant={compiledNotesFilter === "all" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setCompiledNotesFilter("all")}
+                >
+                  All
+                </Badge>
+                <Badge
+                  variant={compiledNotesFilter === "recent" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setCompiledNotesFilter("recent")}
+                >
+                  Recent
+                </Badge>
+                <Badge
+                  variant={compiledNotesFilter === "oldest" ? "default" : "outline"}
+                  className="cursor-pointer hover:bg-primary/10 text-xs"
+                  onClick={() => setCompiledNotesFilter("oldest")}
+                >
+                  Oldest
+                </Badge>
+              </div>
             </div>
 
             {/* Compiled Notes List */}

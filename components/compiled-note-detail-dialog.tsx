@@ -4,10 +4,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import type { CompiledNote, Note, Profile } from "@/lib/types/database"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { Layers, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { X, Volume2, Share2, Loader2, Square } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Badge } from "@/components/ui/badge"
+import { toast } from "sonner"
 
 interface CompiledNoteDetailDialogProps {
   note: CompiledNote
@@ -20,6 +21,11 @@ export function CompiledNoteDetailDialog({ note, isOpen, onClose, userId }: Comp
   const [sourceNotes, setSourceNotes] = useState<Record<string, Note>>({})
   const [friendProfiles, setFriendProfiles] = useState<Record<string, Profile>>({})
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
+  const [isSharing, setIsSharing] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -35,6 +41,17 @@ export function CompiledNoteDetailDialog({ note, isOpen, onClose, userId }: Comp
       setSourceNotes({})
       setFriendProfiles({})
       setCurrentUserId(null)
+      // Cleanup audio
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
+      setIsPlayingAudio(false)
+      setIsLoadingAudio(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, note.source_note_ids?.join(","), note.id])
@@ -102,6 +119,142 @@ export function CompiledNoteDetailDialog({ note, isOpen, onClose, userId }: Comp
       }
     }
   }
+
+  const handlePlayAudio = async () => {
+    // If already playing, stop it
+    if (isPlayingAudio && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      setIsPlayingAudio(false)
+      toast.info("Audio playback stopped")
+      return
+    }
+
+    // If already loading, don't start another request
+    if (isLoadingAudio) {
+      return
+    }
+
+    setIsLoadingAudio(true)
+
+    try {
+      // Prepare text content - handle both object and string formats
+      let textContent: string
+      if (typeof note.content === "string") {
+        textContent = note.content
+      } else if (note.content && typeof note.content === "object") {
+        textContent = JSON.stringify(note.content)
+      } else {
+        textContent = String(note.content || "")
+      }
+
+      const response = await fetch("/api/tts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: textContent,
+          noteId: note.id,
+        }),
+      })
+
+      if (!response.ok) {
+        let errorMessage = "Failed to generate audio"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.details || errorData.error || errorMessage
+          console.error("[Audio] API error:", errorData)
+        } catch {
+          const errorText = await response.text()
+          errorMessage = errorText || errorMessage
+          console.error("[Audio] API error (raw):", errorText)
+        }
+        throw new Error(errorMessage)
+      }
+
+      const blob = await response.blob()
+      
+      if (!blob || blob.size === 0) {
+        throw new Error("Received empty audio file")
+      }
+
+      // Clean up previous audio if it exists
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
+
+      const audioUrl = URL.createObjectURL(blob)
+      audioUrlRef.current = audioUrl
+      const audio = new Audio(audioUrl)
+      audioRef.current = audio
+
+      audio.onerror = (e) => {
+        console.error("[Audio] Playback error:", e)
+        toast.error("Failed to play audio file")
+        setIsPlayingAudio(false)
+        setIsLoadingAudio(false)
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current)
+          audioUrlRef.current = null
+        }
+        audioRef.current = null
+      }
+
+      audio.onended = () => {
+        setIsPlayingAudio(false)
+        setIsLoadingAudio(false)
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current)
+          audioUrlRef.current = null
+        }
+        audioRef.current = null
+      }
+
+      await audio.play()
+      setIsLoadingAudio(false)
+      setIsPlayingAudio(true)
+      toast.success("Playing note audio")
+    } catch (error) {
+      console.error("[Audio] Error playing audio:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to play audio"
+      toast.error(errorMessage)
+      setIsPlayingAudio(false)
+      setIsLoadingAudio(false)
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
+      audioRef.current = null
+    }
+  }
+
+  const handleShareToX = () => {
+    setIsSharing(true)
+
+    const shareText = `Just created compiled notes on "${note.title}" using NoteNest! #NoteNest #StudyTech`
+    const shareUrl = window.location.origin + "/dashboard"
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`
+
+    window.open(twitterUrl, "_blank", "width=550,height=420")
+
+    // Track share analytics
+    fetch("/api/analytics/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        noteId: note.id,
+        action: "share",
+      }),
+    }).catch(console.error)
+
+    setIsSharing(false)
+    toast.success("Opening X to share your note!")
+  }
+
   return (
     <TooltipProvider>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -109,15 +262,39 @@ export function CompiledNoteDetailDialog({ note, isOpen, onClose, userId }: Comp
           <DialogHeader className="flex-shrink-0 p-6 pb-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <Layers className="w-6 h-6 text-accent" />
-                  <DialogTitle className="text-2xl gradient-text">{note.title}</DialogTitle>
-                </div>
+                <DialogTitle className="text-2xl gradient-text">{note.title}</DialogTitle>
+                {note.tags && note.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {note.tags.map((tag: string) => (
+                      <Badge key={tag} variant="secondary" className="bg-primary/10 text-primary">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
                 <p className="text-sm text-muted-foreground mt-2">
                   {Object.keys(sourceNotes).length} references
                 </p>
               </div>
               <div className="flex gap-2 flex-shrink-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handlePlayAudio}
+                  disabled={isLoadingAudio}
+                  title={isPlayingAudio ? "Stop audio" : "Play as audio"}
+                >
+                  {isLoadingAudio ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isPlayingAudio ? (
+                    <Square className="w-4 h-4" />
+                  ) : (
+                    <Volume2 className="w-4 h-4" />
+                  )}
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleShareToX} disabled={isSharing} title="Share on X">
+                  <Share2 className="w-4 h-4" />
+                </Button>
                 <Button size="sm" variant="outline" onClick={onClose} title="Close">
                   <X className="w-4 h-4" />
                 </Button>
