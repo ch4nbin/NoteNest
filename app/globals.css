@@ -146,22 +146,31 @@
   }
 }
 
-/* Refined gradient text with softer pastel blues */
+/* Refined gradient text with moving blue gradient */
 .gradient-text {
-  background: linear-gradient(135deg, oklch(0.6 0.18 245) 0%, oklch(0.65 0.15 240) 50%, oklch(0.7 0.12 235) 100%);
+  background: linear-gradient(
+    135deg,
+    oklch(0.55 0.22 250) 0%,
+    oklch(0.65 0.18 240) 20%,
+    oklch(0.75 0.15 230) 40%,
+    oklch(0.65 0.18 240) 60%,
+    oklch(0.55 0.22 250) 80%,
+    oklch(0.65 0.18 240) 100%,
+    oklch(0.55 0.22 250) 100%
+  );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  background-size: 200% auto;
+  background-size: 300% 300%;
+  animation: gradient-flow 4s ease-in-out infinite;
 }
 
 @keyframes gradient-flow {
-  0%,
-  100% {
-    background-position: 0% center;
+  0%, 100% {
+    background-position: 0% 50%;
   }
   50% {
-    background-position: 100% center;
+    background-position: 100% 50%;
   }
 }
 
@@ -259,4 +268,53 @@
 .animate-gradient {
   background-size: 200% 200%;
   animation: gradient 15s ease infinite;
+}
+
+/* Animated blue gradient button */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.btn-gradient-animated {
+  background: linear-gradient(
+    90deg,
+    oklch(0.55 0.22 250) 0%,
+    oklch(0.65 0.18 240) 25%,
+    oklch(0.75 0.15 230) 50%,
+    oklch(0.65 0.18 240) 75%,
+    oklch(0.55 0.22 250) 100%,
+    oklch(0.65 0.18 240) 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  background-position: 0% 50% !important;
+  animation: gradient-shift 2s ease-in-out infinite !important;
+  color: white !important;
+  border: none !important;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-gradient-animated:hover {
+  background: linear-gradient(
+    90deg,
+    oklch(0.55 0.22 250) 0%,
+    oklch(0.65 0.18 240) 25%,
+    oklch(0.75 0.15 230) 50%,
+    oklch(0.65 0.18 240) 75%,
+    oklch(0.55 0.22 250) 100%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: gradient-shift 1.5s ease-in-out infinite !important;
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px oklch(0.65 0.18 240 / 0.3), 0 8px 24px oklch(0.65 0.18 240 / 0.4) !important;
+}
+
+.btn-gradient-animated:active {
+  transform: translateY(0);
 }
