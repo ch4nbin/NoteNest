@@ -4,8 +4,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import type { Note } from "@/lib/types/database"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Volume2, Share2, Loader2, X } from "lucide-react"
-import { useState } from "react"
+import { Volume2, Share2, Loader2, X, Square } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
 import { toast } from "sonner"
 
 interface NoteDetailDialogProps {
@@ -16,38 +16,136 @@ interface NoteDetailDialogProps {
 
 export function NoteDetailDialog({ note, isOpen, onClose }: NoteDetailDialogProps) {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioUrlRef = useRef<string | null>(null)
+
+  // Cleanup audio when dialog closes
+  useEffect(() => {
+    if (!isOpen) {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
+      setIsPlayingAudio(false)
+      setIsLoadingAudio(false)
+    }
+  }, [isOpen])
 
   const handlePlayAudio = async () => {
-    setIsPlayingAudio(true)
+    // If already playing, stop it
+    if (isPlayingAudio && audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      setIsPlayingAudio(false)
+      toast.info("Audio playback stopped")
+      return
+    }
+
+    // If already loading, don't start another request
+    if (isLoadingAudio) {
+      return
+    }
+
+    setIsLoadingAudio(true)
 
     try {
+      // Prepare text content - handle both object and string formats
+      let textContent: string
+      if (typeof note.content === "string") {
+        textContent = note.content
+      } else if (note.content && typeof note.content === "object") {
+        textContent = JSON.stringify(note.content)
+      } else {
+        textContent = String(note.content || "")
+      }
+
       const response = await fetch("/api/tts/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          text: JSON.stringify(note.content),
+          text: textContent,
           noteId: note.id,
         }),
       })
 
-      if (!response.ok) throw new Error("Failed to generate audio")
+      if (!response.ok) {
+        let errorMessage = "Failed to generate audio"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.details || errorData.error || errorMessage
+          console.error("[Audio] API error:", errorData)
+        } catch {
+          const errorText = await response.text()
+          errorMessage = errorText || errorMessage
+          console.error("[Audio] API error (raw):", errorText)
+        }
+        throw new Error(errorMessage)
+      }
 
       const blob = await response.blob()
+      
+      if (!blob || blob.size === 0) {
+        throw new Error("Received empty audio file")
+      }
+
+      // Clean up previous audio if it exists
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
+
       const audioUrl = URL.createObjectURL(blob)
+      audioUrlRef.current = audioUrl
       const audio = new Audio(audioUrl)
+      audioRef.current = audio
+
+      audio.onerror = (e) => {
+        console.error("[Audio] Playback error:", e)
+        toast.error("Failed to play audio file")
+        setIsPlayingAudio(false)
+        setIsLoadingAudio(false)
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current)
+          audioUrlRef.current = null
+        }
+        audioRef.current = null
+      }
 
       audio.onended = () => {
         setIsPlayingAudio(false)
-        URL.revokeObjectURL(audioUrl)
+        setIsLoadingAudio(false)
+        if (audioUrlRef.current) {
+          URL.revokeObjectURL(audioUrlRef.current)
+          audioUrlRef.current = null
+        }
+        audioRef.current = null
       }
 
-      audio.play()
+      await audio.play()
+      setIsLoadingAudio(false)
+      setIsPlayingAudio(true)
       toast.success("Playing note audio")
     } catch (error) {
-      console.error("Error playing audio:", error)
-      toast.error("Failed to play audio")
+      console.error("[Audio] Error playing audio:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to play audio"
+      toast.error(errorMessage)
       setIsPlayingAudio(false)
+      setIsLoadingAudio(false)
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
+      audioRef.current = null
     }
   }
 
@@ -94,10 +192,16 @@ export function NoteDetailDialog({ note, isOpen, onClose }: NoteDetailDialogProp
                 size="sm"
                 variant="outline"
                 onClick={handlePlayAudio}
-                disabled={isPlayingAudio}
-                title="Play as audio"
+                disabled={isLoadingAudio}
+                title={isPlayingAudio ? "Stop audio" : "Play as audio"}
               >
-                {isPlayingAudio ? <Loader2 className="w-4 h-4 animate-spin" /> : <Volume2 className="w-4 h-4" />}
+                {isLoadingAudio ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isPlayingAudio ? (
+                  <Square className="w-4 h-4" />
+                ) : (
+                  <Volume2 className="w-4 h-4" />
+                )}
               </Button>
               <Button size="sm" variant="outline" onClick={handleShareToX} disabled={isSharing} title="Share on X">
                 <Share2 className="w-4 h-4" />
