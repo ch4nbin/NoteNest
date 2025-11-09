@@ -26,6 +26,7 @@ export function NotesView({ userId }: NotesViewProps) {
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([])
   const [allTags, setAllTags] = useState<string[]>([])
   const [compiledNotesFilter, setCompiledNotesFilter] = useState<string>("all")
+  const [filtersLoaded, setFiltersLoaded] = useState(false)
   const [isCompiling, setIsCompiling] = useState(false)
   const [compileProgress, setCompileProgress] = useState<string>("")
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -34,11 +35,55 @@ export function NotesView({ userId }: NotesViewProps) {
 
   const supabase = createClient()
 
+  // Load filters from localStorage on mount
   useEffect(() => {
-    fetchMyNotes()
-    fetchFriendsAndTheirNotes()
-    fetchCompiledNotes()
+    if (typeof window !== "undefined") {
+      const savedMyNotesFilter = localStorage.getItem("myNotesFilter") || ""
+      const savedCompiledNotesFilter = localStorage.getItem("compiledNotesFilter") || "all"
+      const savedSelectedFriends = JSON.parse(localStorage.getItem("selectedFriends") || "[]")
+      const savedSelectedTags = JSON.parse(localStorage.getItem("selectedTags") || "[]")
+
+      setMyNotesFilter(savedMyNotesFilter)
+      setCompiledNotesFilter(savedCompiledNotesFilter)
+      setSelectedFriends(savedSelectedFriends)
+      setSelectedTags(savedSelectedTags)
+      setFiltersLoaded(true)
+    }
   }, [])
+
+  // Fetch data after filters are loaded
+  useEffect(() => {
+    if (filtersLoaded) {
+      fetchMyNotes()
+      fetchFriendsAndTheirNotes()
+      fetchCompiledNotes()
+    }
+  }, [filtersLoaded])
+
+  // Save filters to localStorage when they change
+  useEffect(() => {
+    if (filtersLoaded && typeof window !== "undefined") {
+      localStorage.setItem("myNotesFilter", myNotesFilter)
+    }
+  }, [myNotesFilter, filtersLoaded])
+
+  useEffect(() => {
+    if (filtersLoaded && typeof window !== "undefined") {
+      localStorage.setItem("compiledNotesFilter", compiledNotesFilter)
+    }
+  }, [compiledNotesFilter, filtersLoaded])
+
+  useEffect(() => {
+    if (filtersLoaded && typeof window !== "undefined") {
+      localStorage.setItem("selectedFriends", JSON.stringify(selectedFriends))
+    }
+  }, [selectedFriends, filtersLoaded])
+
+  useEffect(() => {
+    if (filtersLoaded && typeof window !== "undefined") {
+      localStorage.setItem("selectedTags", JSON.stringify(selectedTags))
+    }
+  }, [selectedTags, filtersLoaded])
 
   const fetchMyNotes = async () => {
     const { data, error } = await supabase
@@ -282,23 +327,30 @@ export function NotesView({ userId }: NotesViewProps) {
 
       {isCompileMode && (
         <div className="flex-shrink-0 px-8 pb-4">
-          <div className="max-w-[1800px] mx-auto bg-primary/10 border border-primary/20 rounded-lg p-4 flex items-center justify-between">
-            <span className="text-sm font-medium">Select notes to compile ({selectedNoteIds.length} selected)</span>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={handleCancel}>
-                {isCompiling ? "Cancel Compilation" : "Cancel"}
-              </Button>
-              <Button onClick={handleCompile} className="bg-primary" disabled={isCompiling}>
-                {isCompiling ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    <span>{compileProgress}</span>
-                  </>
-                ) : (
-                  "Create Compiled Note"
-                )}
-              </Button>
+          <div className="max-w-[1800px] mx-auto bg-primary/10 border border-primary/20 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium">Select notes to compile ({selectedNoteIds.length} selected)</span>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleCancel}>
+                  {isCompiling ? "Cancel Compilation" : "Cancel"}
+                </Button>
+                <Button onClick={handleCompile} className="bg-primary" disabled={isCompiling}>
+                  {isCompiling ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      <span>{compileProgress}</span>
+                    </>
+                  ) : (
+                    "Create Compiled Note"
+                  )}
+                </Button>
+              </div>
             </div>
+            {isCompiling && (
+              <p className="text-xs text-muted-foreground mt-2">
+                ⚠️ Warning: Do not leave or refresh this page, or the compilation will be aborted.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -314,7 +366,10 @@ export function NotesView({ userId }: NotesViewProps) {
             <div className="space-y-3 mb-4 flex-shrink-0">
               <div>
                 <label className="text-sm font-medium mb-2 block">Filter by Friend</label>
-                <Select onValueChange={(value) => setSelectedFriends(value === "all" ? [] : [value])}>
+                <Select
+                  value={selectedFriends.length === 0 ? "all" : selectedFriends[0]}
+                  onValueChange={(value) => setSelectedFriends(value === "all" ? [] : [value])}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="All friends" />
                   </SelectTrigger>
@@ -357,7 +412,10 @@ export function NotesView({ userId }: NotesViewProps) {
             {/* Filter */}
             <div className="mb-4 flex-shrink-0">
               <label className="text-sm font-medium mb-2 block">Filter by Tag</label>
-              <Select onValueChange={(value) => setMyNotesFilter(value === "all" ? "" : value)}>
+              <Select
+                value={myNotesFilter === "" ? "all" : myNotesFilter}
+                onValueChange={(value) => setMyNotesFilter(value === "all" ? "" : value)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All tags" />
                 </SelectTrigger>
