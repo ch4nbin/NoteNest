@@ -185,6 +185,136 @@ const nonFriendUsers = [
       },
     ],
   },
+  {
+    username: "Ryan Thompson",
+    notes: [
+      {
+        title: "GraphQL vs REST API",
+        content: {
+          sections: [
+            {
+              title: "REST API Overview",
+              content:
+                "REST (Representational State Transfer) is an architectural style for designing networked applications. It uses standard HTTP methods (GET, POST, PUT, DELETE) and stateless communication. REST APIs are simple, cacheable, and work well with existing web infrastructure.",
+            },
+            {
+              title: "GraphQL Advantages",
+              content:
+                "GraphQL allows clients to request exactly the data they need, reducing over-fetching and under-fetching. It provides a single endpoint, strong typing, and real-time subscriptions. GraphQL enables better developer experience with introspection and powerful tooling.",
+            },
+          ],
+        },
+        tags: ["GraphQL", "REST", "API Design", "Backend"],
+        source_url: "https://example.com/graphql-rest",
+        source_type: "url",
+        is_public: true,
+      },
+    ],
+  },
+  {
+    username: "Lily Zhang",
+    notes: [
+      {
+        title: "Neural Networks Fundamentals",
+        content: {
+          sections: [
+            {
+              title: "Basic Architecture",
+              content:
+                "Neural networks consist of layers of interconnected nodes (neurons). Input layers receive data, hidden layers process information, and output layers produce results. Each connection has a weight that adjusts during training to minimize error.",
+            },
+            {
+              title: "Training Process",
+              content:
+                "Training involves forward propagation (data flows through the network) and backpropagation (errors flow backward to update weights). Gradient descent optimizes the weights to minimize the loss function. Learning rate controls how quickly the network adapts.",
+            },
+          ],
+        },
+        tags: ["Neural Networks", "Machine Learning", "AI", "Deep Learning"],
+        source_url: "https://example.com/neural-networks",
+        source_type: "url",
+        is_public: true,
+      },
+    ],
+  },
+  {
+    username: "Noah Williams",
+    notes: [
+      {
+        title: "Kubernetes Orchestration",
+        content: {
+          sections: [
+            {
+              title: "Container Orchestration",
+              content:
+                "Kubernetes automates deployment, scaling, and management of containerized applications. It provides service discovery, load balancing, storage orchestration, and automated rollouts and rollbacks. Kubernetes abstracts away infrastructure complexity.",
+            },
+            {
+              title: "Key Concepts",
+              content:
+                "Pods are the smallest deployable units, containing one or more containers. Services provide stable networking for pods. Deployments manage replica sets and enable rolling updates. ConfigMaps and Secrets manage configuration and sensitive data.",
+            },
+          ],
+        },
+        tags: ["Kubernetes", "DevOps", "Containers", "Orchestration"],
+        source_url: "https://example.com/kubernetes",
+        source_type: "url",
+        is_public: true,
+      },
+    ],
+  },
+  {
+    username: "Ava Rodriguez",
+    notes: [
+      {
+        title: "UI/UX Design Principles",
+        content: {
+          sections: [
+            {
+              title: "User-Centered Design",
+              content:
+                "User-centered design prioritizes user needs and goals throughout the design process. It involves user research, personas, user journeys, and iterative testing. Understanding user context and behavior is essential for creating effective interfaces.",
+            },
+            {
+              title: "Visual Hierarchy",
+              content:
+                "Visual hierarchy guides users' attention through size, color, contrast, and spacing. Important elements should be prominent, while secondary information should be de-emphasized. Consistent typography and spacing create cohesive, readable interfaces.",
+            },
+          ],
+        },
+        tags: ["UI/UX", "Design", "User Experience", "Interface Design"],
+        source_url: "https://example.com/ui-ux-design",
+        source_type: "url",
+        is_public: true,
+      },
+    ],
+  },
+  {
+    username: "Ethan Lee",
+    notes: [
+      {
+        title: "Blockchain Technology Basics",
+        content: {
+          sections: [
+            {
+              title: "What is Blockchain?",
+              content:
+                "Blockchain is a distributed ledger technology that maintains a continuously growing list of records (blocks) linked and secured using cryptography. Each block contains a hash of the previous block, creating an immutable chain. This ensures data integrity without a central authority.",
+            },
+            {
+              title: "Key Features",
+              content:
+                "Decentralization removes the need for intermediaries. Immutability ensures records cannot be altered retroactively. Transparency allows all participants to view the ledger. Consensus mechanisms like Proof of Work or Proof of Stake validate transactions.",
+            },
+          ],
+        },
+        tags: ["Blockchain", "Cryptocurrency", "Distributed Systems", "Technology"],
+        source_url: "https://example.com/blockchain",
+        source_type: "url",
+        is_public: true,
+      },
+    ],
+  },
 ]
 
 export async function POST(request: NextRequest) {
