@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { question, url, context } = await request.json()
+  const { question, url, context, transcript } = await request.json()
 
   try {
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -31,7 +31,12 @@ export async function POST(request: NextRequest) {
           },
           {
             role: "user",
-            content: `Context from ${url}:\n${JSON.stringify(context)}\n\nQuestion: ${question}\n\nProvide a clear, concise answer.`,
+            content: `Context from ${url || "meeting"}:
+${transcript ? `\nFull Meeting Transcript:\n${transcript}\n\n` : ""}
+${context && context.length > 0 ? `Generated Notes:\n${JSON.stringify(context, null, 2)}\n\n` : ""}
+Question: ${question}
+
+Provide a clear, concise answer based on the transcript and notes above.`,
           },
         ],
         temperature: 0.7,
