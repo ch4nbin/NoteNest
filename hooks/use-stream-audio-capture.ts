@@ -21,7 +21,7 @@ interface UseStreamAudioCaptureReturn {
 export function useStreamAudioCapture({
   stream,
   onAudioChunk,
-  chunkInterval = 5000, // 5 seconds for more frequent transcription
+  chunkInterval = 3000, // 3 seconds for more frequent transcription
   enabled = true,
 }: UseStreamAudioCaptureOptions): UseStreamAudioCaptureReturn {
   const [isCapturing, setIsCapturing] = useState(false)

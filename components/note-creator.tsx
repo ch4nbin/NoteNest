@@ -272,7 +272,7 @@ export function NoteCreator({ userId }: NoteCreatorProps) {
         setIsTranscribing(false)
       }
     },
-    chunkInterval: 5000, // Transcribe every 5 seconds for continuous updates
+    chunkInterval: 3000, // Transcribe every 3 seconds for more frequent updates
     enabled: !!capturedStream && contentStarted,
   })
 
@@ -565,8 +565,8 @@ export function NoteCreator({ userId }: NoteCreatorProps) {
 
   return (
     <div className="flex h-full">
-      {/* Left side - Content viewer */}
-      <div className="flex-1 flex flex-col border-r border-border">
+      {/* Left side - Content viewer (smaller) */}
+      <div className="w-[300px] flex-shrink-0 flex flex-col border-r border-border">
         <div className="p-6 border-b border-border bg-card">
           <h1 className="text-2xl font-bold mb-4">
             <span className="gradient-text">Create New Note</span>
@@ -656,19 +656,14 @@ export function NoteCreator({ userId }: NoteCreatorProps) {
         </div>
       </div>
 
-      {/* Right side - AI Assistant */}
-      <div className="w-[400px] flex flex-col bg-card">
+      {/* Right side - AI Assistant (larger) */}
+      <div className="flex-1 flex flex-col bg-card min-w-0">
         <div className="p-4 border-b border-border">
           <h2 className="font-semibold text-lg text-primary">AI Assistant</h2>
         </div>
 
-        <Tabs defaultValue={isZoomMeeting ? "recorder" : "notes"} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <Tabs defaultValue="notes" className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <TabsList className="mx-4 mt-4">
-            {isZoomMeeting && (
-              <TabsTrigger value="recorder" className="flex-1">
-                Recorder
-              </TabsTrigger>
-            )}
             <TabsTrigger value="notes" className="flex-1">
               Notes
             </TabsTrigger>
